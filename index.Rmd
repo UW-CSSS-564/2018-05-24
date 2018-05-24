@@ -1,0 +1,104 @@
+---
+title: "Multilevel Models and Noncentered Parameterization"
+author: "Connor Gilroy"
+date: "2018-05-24"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+# Resources
+
+http://elevanth.org/blog/2017/08/24/multilevel-regression-as-default/
+
+http://elevanth.org/blog/2017/09/07/metamorphosis-multilevel-model/
+
+http://mc-stan.org/bayesplot/articles/visual-mcmc-diagnostics.html
+
+# Setup
+
+```{r message=FALSE, warning=FALSE}
+library("rstan")
+library("tidyverse")
+library("bayesplot")
+
+options(mc.cores = parallel::detectCores())
+rstan_options(auto_write = TRUE)
+theme_set(theme_minimal())
+```
+
+# First example
+
+This uses data from the `rethinking` package, and implements the model from the second blog post above.
+
+```{r}
+# devtools::install_github("rmcelreath/rethinking")
+data("bangladesh", package = "rethinking")
+bangladesh <- as_tibble(bangladesh) %>% sample_n(100)
+glimpse(bangladesh)
+```
+
+```{r}
+d <- list(
+  y = bangladesh$use.contraception,
+  district = as.integer(as.factor(bangladesh$district))
+)
+
+d$N <- length(d$y)
+d$J <- length(unique(d$district))
+```
+
+```{r message=FALSE}
+fit_cp <- stan("stan/multilevel_model_centered.stan", data = d, chains = 2)
+```
+
+```{r}
+mcmc_trace(as.array(fit_cp), pars = "tau")
+```
+
+
+```{r message=FALSE}
+fit_ncp <- stan("stan/multilevel_model_noncentered.stan", data = d, chains = 2)
+```
+
+```{r}
+mcmc_trace(as.array(fit_ncp), pars = "tau")
+```
+
+# Second example
+
+`nlschools` is a data set of test scores of 8th-grade pupils from different schools in the Netherlands. (`?MASS::nlschools` for more information)
+
+```{r}
+data("nlschools", package = "MASS")
+nlschools <- as_tibble(nlschools) %>% sample_n(200)
+glimpse(nlschools)
+```
+
+```{r}
+d_nls <- list()
+
+d_nls$y <- as.vector(scale(nlschools$lang))
+d_nls$X <- 
+  nlschools %>%
+  select(GS, SES) %>%
+  scale() %>%
+  as.matrix()
+
+d_nls$group <- as.numeric(as.factor(as.numeric(nlschools$class)))
+```
+
+```{r}
+d_nls$N <- length(d_nls$y)
+d_nls$K <- ncol(d_nls$X)
+d_nls$J <- length(unique(d_nls$group))
+```
+
+```{r message=FALSE}
+fit_mlm_cp <- stan("stan/linear_regression/multilevel_regression_cp.stan", data = d_nls)
+```
+
+```{r message=FALSE}
+fit_mlm <- stan("stan/linear_regression/multilevel_regression_ncp.stan", data = d_nls)
+```
+
